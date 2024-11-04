@@ -1,0 +1,38 @@
+name: Update Cumulative Usage
+on:
+  schedule:
+    - cron: "* * 1 * *" # First day of every month
+  workflow_dispatch:
+
+
+jobs:
+  update-usage:
+    runs-on: ubuntu-24.04
+
+    steps:
+
+    - name: Check out repo
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Update android cumulative usage stats
+      id: update_file
+      run: |
+        BEFORE_HASH="$(sha256sum index.md)"
+        pwsh -File meta/android-usage-generator.ps1 -LastMonth
+        AFTER_HASH="$(sha256sum index.md)"
+        [ "$AFTER_HASH" = "$BEFORE_HASH" ] && echo "No commit needed." || echo "NEEDS_COMMIT=true" >> "$GITHUB_OUTPUT"
+
+    - name: Commit changes
+      id: commit_changes
+      if: ${{ steps.update_file.outputs.NEEDS_COMMIT == 'true' }}
+      run: |
+        git config user.name "TheFreeman193"
+        git config user.email "<thefreeman193@users.noreply.github.com>"
+        git add index.md
+        git commit -m "Update Android cumulative usage stats $(date "+%B %Y")" && echo "NEEDS_PUSH=true" >> "$GITHUB_OUTPUT"
+
+    - name: Push new commit
+      if: ${{ steps.commit_changes.outputs.NEEDS_PUSH == 'true' }}
+      run: git push
